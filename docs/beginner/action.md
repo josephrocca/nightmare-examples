@@ -108,6 +108,34 @@ There is also an ambient reference to `require` so you can pull in libraries as 
 - `nightmare.child.call(name, [args,] done)` - This method calls the `method` through the IPC process to the Electron process.  There is also some internal sugar to prevent multiple calls to the same method from getting results from a different call.
 - `IPC.respondTo(name, done)` - This responds to the `child.call()` name, calling `done` when complete as a callback.  Note that data can be passed through `done` as a normal callback would.
 
+#### Passing arguments to a custom electron action
+
+Here's an example of a custom electron action that takes an argument. Here we're passing the `keyCode` argument to [`win.webContents.sendInputEvent`](https://github.com/electron/electron/blob/master/docs/api/web-contents.md#contentssendinputeventevent) so that we can simulate special keypresses like the arrow keys (which aren't supported by `.type()`):
+
+```javascript
+  Nightmare.action('specialKeyPress',
+  function(name, options, parent, win, renderer, done) {
+    parent.respondTo('specialKeyPress', async function(keyCode, done) { // <-- arguments come before `done`
+      /* Now we can use the keyCode argument */
+      win.webContents.sendInputEvent({ type:'keyDown', keyCode });
+      await new Promise(resolve => setTimeout(resolve, 50));
+      win.webContents.sendInputEvent({ type:'keyUp', keyCode });
+      done();
+    });
+    done();
+  },
+  function(keyCode, done) { // <-- arguments come before `done`
+    this.child.call('specialKeyPress', keyCode, done); // <-- arguments come after name and before `done`
+  });
+```
+This custom action takes any of the `keyCode`s listed in [this document](https://github.com/electron/electron/blob/master/docs/api/accelerator.md). It is used like this:
+
+```javascript
+await nightmare
+  .goto('http://example.com')
+  .specialKeyPress('Down'); // or `Up` or `Right` etc.
+```
+
 ## `.action()` must be called before instantiation
 
 Be sure that the action is added to the Nightmare prototype before you create your instance of Nightmare.  Otherwise, the action will not be added to the instance.
